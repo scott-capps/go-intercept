@@ -1,21 +1,22 @@
 # Go HTTP Middleware: Interceptor
 
-Interceptor is a powerful HTTP middleware package for Go. It allows you to chain multiple middleware functions together to create a pipeline for your HTTP requests and responses. 
+Interceptor is a powerful HTTP middleware package for Go. It allows you to chain multiple middleware functions together to create a pipeline for your HTTP requests and responses.
 
 ## Table of Contents
 
 1. [Getting Started](#getting-started)
 2. [Middlewares](#middlewares)
-    - [Use()](#use)
-    - [WithCookie()](#withcookie)
-    - [WithLimitedHTTPVerbs()](#withlimitedhttpverbs)
-    - [WithMaxBody()](#withmaxbody)
-    - [WithCors()](#withcors)
-    - [WithHeaderParser()](#withheaderparser)
-    - [WithAllowedSchemes()](#withallowedschemes)
-    - [WithContentSecurityPolicyProtection()](#withcontentsecuritypolicyprotection)
-    - [WithHSTS()](#withhsts)
-    - [WithLogger()](#withlogger)
+   - [Use()](#use)
+   - [WithCookie()](#withcookie)
+   - [WithCookieParser()](#withcookieparser)
+   - [WithLimitedHTTPVerbs()](#withlimitedhttpverbs)
+   - [WithMaxBody()](#withmaxbody)
+   - [WithCors()](#withcors)
+   - [WithHeaderParser()](#withheaderparser)
+   - [WithAllowedSchemes()](#withallowedschemes)
+   - [WithContentSecurityPolicyProtection()](#withcontentsecuritypolicyprotection)
+   - [WithHSTS()](#withhsts)
+   - [WithLogger()](#withlogger)
 3. [Final()](#final)
 
 ## [Getting Started](#getting-started)
@@ -31,6 +32,7 @@ To use it in your project, import it:
 )`
 
 Here is a basic usage example:
+
 ```
 interceptor := intercept.NewInterceptor()
 interceptor.Use(middleware1).Use(middleware2) // and so on...
@@ -48,6 +50,7 @@ Interceptor comes with various inbuilt middlewares, each of which performs a dif
 ### `WithCookie()`
 
 [`WithCookie()`](#withcookie) sets a cookie in the HTTP response based on the provided cookie configuration.
+
 ```
 Example:
 interceptor := intercept.NewInterceptor()
@@ -69,9 +72,46 @@ cookieConfig := structs.CookieConfig {
 interceptor.WithCookie(cookieConfig)
 ```
 
+### `WithCookieParser()`
+
+[`WithCookieParser()`](#withcookieparser) parses cookies from the HTTP request.
+
+```
+Example:
+interceptor := intercept.NewInterceptor()
+
+policy := policy.CookieParserPolicy{
+  Required: []string{"cookie1", "cookie2"},
+  MaxAge:   86400,
+  Secure:   true,
+  HttpOnly: true,
+  SameSite: http.SameSiteStrictMode,
+  CookiesToParse: []string{"cookie1", "cookie2"},
+  ErrorHandler: func(err error) {
+    log.Println(err)
+  }
+  MissingCookieHandler: func(cookieName string) {
+    log.Printf("cookie %s is missing", cookieName)
+  }
+  InvalidCookieHandler: func(cookieName string, cookie *http.Cookie) {
+    log.Printf("cookie %s is invalid", cookieName)
+  }
+  ValidCookieHandler: func(cookieName string, cookie *http.Cookie) {
+    log.Printf("cookie %s is valid", cookieName)
+  }
+  ErrorPolicy: policy.CookieErrorPolicy{
+    ErrorIfMissing: true,
+    ErrorIfEmpty:   true,
+  }
+}
+
+interceptor.WithCookieParser(policy)
+```
+
 ### `WithLimitedHTTPVerbs()`
 
 [`WithLimitedHTTPVerbs()`](#withlimitedhttpverbs) restricts the allowed HTTP methods based on the provided HTTP verb policy.
+
 ```
 Example:
 chain := middleware.NewMiddlewareChain()
@@ -105,6 +145,7 @@ interceptor.WithMaxBody(maxSize)
 ### `WithCors()`
 
 [`WithCors()`](#withcors) sets the Cross-Origin Resource Sharing (CORS) policy for the HTTP response.
+
 ```
 Example:
 interceptor := middleware.NewMInterceptor()
@@ -118,6 +159,7 @@ interceptor.WithCors(cp)
 ### `WithHeaderParser()`
 
 [`WithHeaderParser()`](#withheaderparser) allows for parsing of specific headers and injecting them into the request's context.
+
 ```
 Example:
 interceptor := intercept.NewInterceptor()
@@ -194,6 +236,7 @@ interceptor.WithLogging(p)
 ```
 
 ### `Final()`
+
 [Final()](#) wraps the provided final HTTP handler with the interceptor. This is the last function you call when setting up your interceptor.
 
 ```

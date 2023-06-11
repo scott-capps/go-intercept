@@ -3,6 +3,7 @@ package intercept
 import (
 	"bytes"
 	"context"
+	"errors"
 	"fmt"
 	"io/ioutil"
 	"log"
@@ -83,6 +84,93 @@ func (interceptor *Interceptor) WithCookie(config structs.CookieConfig) *Interce
 	}
 
 	// Add the middleware function to the chain.
+	interceptor.Use(interceptFunc)
+	return interceptor
+}
+
+/*
+WithCookieParser adds a middleware to the chain that parses cookies from the HTTP request.
+
+	Example:
+	interceptor := intercept.NewInterceptor()
+
+	policy := policy.CookieParserPolicy{
+		Required: []string{"cookie1", "cookie2"},
+		MaxAge:   86400,
+		Secure:   true,
+		HttpOnly: true,
+		SameSite: http.SameSiteStrictMode,
+		CookiesToParse: []string{"cookie1", "cookie2"},
+		ErrorHandler: func(err error) {
+			log.Println(err)
+		}
+		MissingCookieHandler: func(cookieName string) {
+			log.Printf("cookie %s is missing", cookieName)
+		}
+		InvalidCookieHandler: func(cookieName string, cookie *http.Cookie) {
+			log.Printf("cookie %s is invalid", cookieName)
+		}
+		ValidCookieHandler: func(cookieName string, cookie *http.Cookie) {
+			log.Printf("cookie %s is valid", cookieName)
+		}
+		ErrorPolicy: policy.CookieErrorPolicy{
+			ErrorIfMissing: true,
+			ErrorIfEmpty:   true,
+		}
+	}
+
+	interceptor.WithCookieParser(policy)
+*/
+func (interceptor *Interceptor) WithCookieParser(p policy.CookieParserPolicy) *Interceptor {
+	// the middleware function that parses and validates cookies.
+	interceptFunc := func(next http.Handler) http.Handler {
+		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			// Iterate through the list of cookies to parse.
+			for _, cookieName := range p.CookiesToParse {
+				// Try to get the cookie from the request.
+				cookie, err := r.Cookie(cookieName)
+
+				// If there's an error, handle it according to the error handling policy.
+				if err != nil {
+					// If the cookie doesn't exist, create a default cookie and add it to the response.
+					if errors.Is(err, http.ErrNoCookie) {
+						expiration := time.Now().Add(365 * 24 * time.Hour)
+						cookie := http.Cookie{Name: cookieName, Value: "default", Expires: expiration}
+						http.SetCookie(w, &cookie)
+						continue
+					} else if p.ErrorHandler != nil {
+						// If there's an error handler, call it with the error.
+						p.ErrorHandler(err)
+					}
+					continue
+				}
+
+				// Validate the cookie according to the cookie parsing policy.
+				if err = p.ValidateCookie(cookie); err != nil {
+					// If there's an invalid cookie handler, call it with the cookie.
+					if p.InvalidCookieHandler != nil {
+						p.InvalidCookieHandler(cookieName, cookie)
+					}
+					// Return an error to the client.
+					http.Error(w, "error parsing cookie", http.StatusUnauthorized)
+					return
+				}
+
+				// If there's a valid cookie handler, call it with the cookie.
+				if p.ValidCookieHandler != nil {
+					p.ValidCookieHandler(cookieName, cookie)
+				}
+
+				// Add the cookie to the request's context for use in downstream handlers.
+				ctx := context.WithValue(r.Context(), cookieName, cookie)
+				r = r.WithContext(ctx)
+			}
+			// Pass control to the next handler in the chain.
+			next.ServeHTTP(w, r)
+		})
+	}
+
+	// Add the intercept function to the interceptor's middleware chain.
 	interceptor.Use(interceptFunc)
 	return interceptor
 }
